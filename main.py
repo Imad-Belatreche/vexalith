@@ -1,3 +1,5 @@
+import os
+
 from textual import on
 from textual.app import App, ComposeResult
 from textual.containers import Center, HorizontalGroup, VerticalGroup, Container
@@ -12,9 +14,27 @@ from textual.widgets import (
     ListItem,
     Select,
 )
-
+from utils import check_and_create_config, load_config, save_config
 
 history = []
+configs: dict = {}
+CONFIG_FILE = "config.json"
+
+
+class PresetInput(Input):
+    BINDINGS = [
+        ("ctrl+o", "save_preset", "Save preset"),
+    ]
+
+    def action_save_preset(self):
+        preset_text = self.value
+        if preset_text not in configs.get("presets"):
+            configs["presets"].append(preset_text)
+            save_config(CONFIG_FILE, configs)
+
+            self.app.query_one("#presets-list", ListView).mount(
+                ListItem(Label(preset_text))
+            )
 
 
 class VexalithApp(App):
@@ -39,9 +59,6 @@ class VexalithApp(App):
                 Label("Presets", classes="side-titles"),
             ),
             ListView(
-                ListItem(Label("Preset 1")),
-                ListItem(Label("Preset 2")),
-                ListItem(Label("Preset 3")),
                 id="presets-list",
             ),
             id="presets",
@@ -85,15 +102,24 @@ class VexalithApp(App):
             self.settings,
         )
 
-        yield Input(placeholder="Type something here...", type="text", id="input")
+        yield PresetInput(placeholder="Type something here...", type="text", id="input")
 
         yield Footer(show_command_palette=False)
 
     def on_mount(self):
+        global configs
+        
         self.title = "Vexalith"
         self.sub_title = "Speak your mind"
         text = self.query_one(RichLog)
         text.write("Your History log is here")
+
+        check_and_create_config(CONFIG_FILE)
+        configs = load_config(CONFIG_FILE)
+
+        self.query_one("#presets-list", ListView).mount(
+            *[ListItem(Label(preset)) for preset in configs.get("presets")]
+        )
 
     def action_toggle_dark(self):
         self.theme = (

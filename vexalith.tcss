@@ -1,0 +1,50 @@
+RichLog {
+    width: 1fr;
+    height: 1fr;
+    border: double green;
+    padding: 1 1;
+    background: blue 5%;
+}
+
+Input {
+    dock: bottom;
+    width: 100%;
+    margin: 1 0 2 0;
+    padding: 0 1;
+}
+
+Label.side-titles {
+    text-style: bold;
+}
+
+#presets {
+    width: 0;
+    padding: 1;
+    height: 100%;
+}
+
+#presets-list {
+    height: 1fr;
+    margin-top: 1;
+    padding: 1;
+    background: grey 7%;
+    border: solid yellow 30%;
+}
+
+.setting-item {
+    padding-top: 1;
+}
+
+#settings-container {
+    border: solid yellow 30%;
+    background: grey 7%;
+    padding: 0 1;
+    margin-top: 1;
+}
+
+#settings {
+    width: 0;
+    padding: 1;
+}
+
+

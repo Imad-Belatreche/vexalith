@@ -1,3 +1,4 @@
+from textual import on
 from textual.app import App, ComposeResult
 from textual.containers import Center, HorizontalGroup, VerticalGroup, Container
 from textual.reactive import Reactive
@@ -11,6 +12,9 @@ from textual.widgets import (
     ListItem,
     Select,
 )
+
+
+history = []
 
 
 class VexalithApp(App):
@@ -107,6 +111,14 @@ class VexalithApp(App):
 
     def action_toggle_settings(self):
         self.show_settings = not self.show_settings
+
+    @on(Input.Submitted)
+    def handle_input_submition(self, event: Input.Submitted):
+        input_text = event.input.value
+        logs = self.query_one(RichLog)
+        logs.write(input_text)
+        event.input.value = ""
+        history.append(input_text)
 
 
 if __name__ == "__main__":

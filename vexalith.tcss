@@ -1,9 +1,8 @@
 RichLog {
-    width: 1fr;
-    height: 1fr;
-    border: double green;
-    padding: 1 1;
-    background: blue 5%;
+    background: transparent;
+    color: yellow;
+    overflow_y: auto;
+    scrollbar_size_vertical: 2;    
 }
 
 Input {
@@ -33,6 +32,16 @@ Label.side-titles {
 
 .setting-item {
     padding-top: 1;
+}
+
+.main-area {
+    width: 1fr;
+    height: 1fr;
+    margin-top: 1;
+    border: double green;
+    padding: 1 1;
+    background: blue 5%;
+    color: white;
 }
 
 #settings-container {

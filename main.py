@@ -22,9 +22,31 @@ CONFIG_FILE = "config.json"
 
 
 class PresetInput(Input):
+    index = len(history)
+    old_val = ""
+    used_history = False
     BINDINGS = [
         ("ctrl+o", "save_preset", "Save preset"),
+        ("up", "history_up", "History up"),
+        ("down", "history_down", "History down"),
     ]
+
+    def action_history_up(self):
+        if self.index > 0:
+            self.index = self.index - 1
+            self.value = history[self.index]
+            self.used_history = True
+
+    def action_history_down(self):
+        if self.index < len(history) - 1:
+            self.index = self.index + 1
+            self.value = history[self.index]
+            self.used_history = True
+
+        elif self.index == len(history) - 1:
+            self.index = self.index + 1
+            self.value = self.old_val
+            self.used_history = False
 
     def action_save_preset(self):
         preset_text = self.value
@@ -35,6 +57,22 @@ class PresetInput(Input):
             self.app.query_one("#presets-list", ListView).mount(
                 ListItem(Label(preset_text))
             )
+
+    @on(Input.Changed)
+    def save_old_value(self, event: Input.Changed):
+        if not self.used_history:
+            self.old_val = event.input.value
+        print(self.old_val)
+
+    @on(Input.Submitted)
+    def handle_input_submition(self, event: Input.Submitted):
+        input_text = event.input.value
+        logs = self.app.query_one(RichLog)
+        logs.write(input_text)
+        event.input.value = ""
+        history.append(input_text)
+        self.index = len(history)
+        self.used_history = False
 
 
 class VexalithApp(App):
@@ -108,7 +146,7 @@ class VexalithApp(App):
 
     def on_mount(self):
         global configs
-        
+
         self.title = "Vexalith"
         self.sub_title = "Speak your mind"
         text = self.query_one(RichLog)
@@ -137,14 +175,6 @@ class VexalithApp(App):
 
     def action_toggle_settings(self):
         self.show_settings = not self.show_settings
-
-    @on(Input.Submitted)
-    def handle_input_submition(self, event: Input.Submitted):
-        input_text = event.input.value
-        logs = self.query_one(RichLog)
-        logs.write(input_text)
-        event.input.value = ""
-        history.append(input_text)
 
 
 if __name__ == "__main__":

@@ -36,17 +36,20 @@ class PresetInput(Input):
             self.index = self.index - 1
             self.value = history[self.index]
             self.used_history = True
+            self.cursor_position = len(self.value)
 
     def action_history_down(self):
         if self.index < len(history) - 1:
             self.index = self.index + 1
             self.value = history[self.index]
             self.used_history = True
+            self.cursor_position = len(self.value)
 
         elif self.index == len(history) - 1:
             self.index = self.index + 1
             self.value = self.old_val
             self.used_history = False
+            self.cursor_position = len(self.value)
 
     def action_save_preset(self):
         preset_text = self.value
@@ -66,9 +69,14 @@ class PresetInput(Input):
 
     @on(Input.Submitted)
     def handle_input_submition(self, event: Input.Submitted):
-        input_text = event.input.value
+        input_text = event.input.value.strip()
+        if not input_text:
+            return
+        if input_text == history[-1] if history else None:
+            self.value = ""
+            return
         logs = self.app.query_one(RichLog)
-        logs.write(input_text)
+        logs.write(f"- {input_text}")
         event.input.value = ""
         history.append(input_text)
         self.index = len(history)
@@ -132,10 +140,15 @@ class VexalithApp(App):
 
         yield HorizontalGroup(
             self.presets,
-            RichLog(
-                id="log",
-                auto_scroll=True,
-                highlight=False,
+            VerticalGroup(
+                Center(Label("=={{   History log   }}==")),
+                RichLog(
+                    id="log",
+                    auto_scroll=True,
+                    highlight=False,
+                    wrap=True,
+                ),
+                classes="main-area",
             ),
             self.settings,
         )
@@ -149,8 +162,6 @@ class VexalithApp(App):
 
         self.title = "Vexalith"
         self.sub_title = "Speak your mind"
-        text = self.query_one(RichLog)
-        text.write("Your History log is here")
 
         check_and_create_config(CONFIG_FILE)
         configs = load_config(CONFIG_FILE)
@@ -158,6 +169,7 @@ class VexalithApp(App):
         self.query_one("#presets-list", ListView).mount(
             *[ListItem(Label(preset)) for preset in configs.get("presets")]
         )
+        self.query_one("#input").focus()
 
     def action_toggle_dark(self):
         self.theme = (

@@ -25,7 +25,9 @@ history = []
 configs: dict = {}
 CONFIG_FILE = "config.json"
 
-syn_settings = SynthesisConfig(length_scale=1.0)
+syn_settings = SynthesisConfig(
+    noise_scale=0.3, length_scale=1.0, noise_w_scale=0.55, normalize_audio=True
+)
 voice = PiperVoice.load(
     model_path="en_US-danny-low.onnx", config_path="en_US-danny-low.onnx.json"
 )
@@ -113,6 +115,7 @@ class PresetInput(Input):
             return
         if input_text == history[-1] if history else None:
             self.value = ""
+            self.index = len(history)
             audio_queue.put(input_text)
             return
         audio_queue.put(input_text)

@@ -1,3 +1,6 @@
+from piper.voice import PiperVoice
+from piper.config import SynthesisConfig
+from piper.audio_playback import AudioPlayer
 import json
 import os
 
@@ -24,3 +27,11 @@ def load_config(file_name: str) -> dict:
 def save_config(file_name: str, config: dict) -> None:
     with open(file_name, "w") as f:
         json.dump(config, f, indent=4)
+
+
+def play_text(text: str, voice: PiperVoice, syn_config: SynthesisConfig):
+    with AudioPlayer(voice.config.sample_rate) as player:
+        for i, audio_chunk in enumerate(voice.synthesize(text, syn_config=syn_config)):
+            if i > 0:
+                player.play(bytes(0))
+            player.play(audio_chunk.audio_int16_bytes)

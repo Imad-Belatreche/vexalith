@@ -52,6 +52,15 @@ def tts_worker():
         play_text(text)
 
 
+class LabelItem(Label):
+    def __init__(self, label: str):
+        super().__init__()
+        self.label = label
+
+    def compose(self):
+        yield Label(self.label)
+
+
 class PresetInput(Input):
     index = len(history)
     old_val = ""
@@ -83,21 +92,19 @@ class PresetInput(Input):
             self.cursor_position = len(self.value)
 
     def action_save_preset(self):
-        preset_text = self.value
-        if preset_text not in configs.get("presets"):
+        preset_text = self.value.strip()
+        if preset_text and preset_text not in configs.get("presets"):
             configs["presets"].append(preset_text)
             save_config(CONFIG_FILE, configs)
 
             self.app.query_one("#presets-list", ListView).mount(
-                ListItem(Label(preset_text))
+                ListItem(LabelItem(preset_text))
             )
 
     @on(Input.Changed)
     def save_old_value(self, event: Input.Changed):
         if not self.used_history:
             self.old_val = event.input.value
-        
-        
 
     @on(Input.Submitted)
     def handle_input_submition(self, event: Input.Submitted):
@@ -201,7 +208,7 @@ class VexalithApp(App):
         configs = load_config(CONFIG_FILE)
 
         self.query_one("#presets-list", ListView).mount(
-            *[ListItem(Label(preset)) for preset in configs.get("presets")]
+            *[ListItem(LabelItem(preset)) for preset in configs.get("presets")]
         )
         self.query_one("#input").focus()
 
@@ -221,6 +228,15 @@ class VexalithApp(App):
 
     def action_toggle_settings(self):
         self.show_settings = not self.show_settings
+
+    @on(ListView.Selected)
+    def on_list_view_selected(self, event: ListView.Selected):
+        input_field = self.query_one("#input", PresetInput)
+        label = event.item.query_one(LabelItem)
+        input_field.value = label.label
+        input_field.select_on_focus = False
+        input_field.focus()
+        input_field.cursor_position = len(input_field.value)
 
 
 if __name__ == "__main__":

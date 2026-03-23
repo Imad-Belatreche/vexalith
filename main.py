@@ -1,5 +1,10 @@
-import os
+from queue import Queue
+from threading import Event, Thread
+import time
 
+from piper.voice import PiperVoice
+from piper.config import SynthesisConfig
+from piper.audio_playback import AudioPlayer
 from textual import on
 from textual.app import App, ComposeResult
 from textual.containers import Center, HorizontalGroup, VerticalGroup, Container
@@ -19,6 +24,32 @@ from utils import check_and_create_config, load_config, save_config
 history = []
 configs: dict = {}
 CONFIG_FILE = "config.json"
+
+syn_settings = SynthesisConfig(length_scale=1.0)
+voice = PiperVoice.load(
+    model_path="en_US-danny-low.onnx", config_path="en_US-danny-low.onnx.json"
+)
+
+audio_queue = Queue()
+
+
+def play_text(text: str):
+    with AudioPlayer(voice.config.sample_rate) as player:
+        for i, audio_chunk in enumerate(
+            voice.synthesize(text, syn_config=syn_settings)
+        ):
+            if i > 0:
+                player.play(bytes(0))
+            player.play(audio_chunk.audio_int16_bytes)
+
+
+def tts_worker():
+    while True:
+        text = audio_queue.get()
+        if text is None:
+            break
+
+        play_text(text)
 
 
 class PresetInput(Input):
@@ -65,7 +96,8 @@ class PresetInput(Input):
     def save_old_value(self, event: Input.Changed):
         if not self.used_history:
             self.old_val = event.input.value
-        print(self.old_val)
+        
+        
 
     @on(Input.Submitted)
     def handle_input_submition(self, event: Input.Submitted):
@@ -74,7 +106,9 @@ class PresetInput(Input):
             return
         if input_text == history[-1] if history else None:
             self.value = ""
+            audio_queue.put(input_text)
             return
+        audio_queue.put(input_text)
         logs = self.app.query_one(RichLog)
         logs.write(f"- {input_text}")
         event.input.value = ""
@@ -190,5 +224,10 @@ class VexalithApp(App):
 
 
 if __name__ == "__main__":
+    thread = Thread(target=tts_worker)
+    thread.start()
     app = VexalithApp()
     app.run()
+
+    audio_queue.put(None)
+    thread.join()

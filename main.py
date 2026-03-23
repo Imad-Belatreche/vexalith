@@ -1,10 +1,7 @@
 from queue import Queue
-from threading import Event, Thread
-import time
+from threading import Thread
 
-from piper.voice import PiperVoice
-from piper.config import SynthesisConfig
-from piper.audio_playback import AudioPlayer
+from piper import PiperVoice, SynthesisConfig
 from textual import on
 from textual.app import App, ComposeResult
 from textual.containers import Center, HorizontalGroup, VerticalGroup, Container
@@ -13,17 +10,18 @@ from textual.widgets import (
     Footer,
     Header,
     RichLog,
-    Input,
     Label,
     ListView,
     ListItem,
     Select,
 )
-from utils import check_and_create_config, load_config, save_config
+from constants import CONFIG_FILE
+from utils import check_and_create_config, load_config, play_text
+from widgets.label_item import LabelItem
+from widgets.preset_input import PresetInput
 
 history = []
 configs: dict = {}
-CONFIG_FILE = "config.json"
 
 syn_settings = SynthesisConfig(
     noise_scale=0.3, length_scale=1.0, noise_w_scale=0.55, normalize_audio=True
@@ -35,96 +33,13 @@ voice = PiperVoice.load(
 audio_queue = Queue()
 
 
-def play_text(text: str):
-    with AudioPlayer(voice.config.sample_rate) as player:
-        for i, audio_chunk in enumerate(
-            voice.synthesize(text, syn_config=syn_settings)
-        ):
-            if i > 0:
-                player.play(bytes(0))
-            player.play(audio_chunk.audio_int16_bytes)
-
-
 def tts_worker():
     while True:
         text = audio_queue.get()
         if text is None:
             break
 
-        play_text(text)
-
-
-class LabelItem(Label):
-    def __init__(self, label: str):
-        super().__init__()
-        self.label = label
-
-    def compose(self):
-        yield Label(self.label)
-
-
-class PresetInput(Input):
-    index = len(history)
-    old_val = ""
-    used_history = False
-    BINDINGS = [
-        ("ctrl+o", "save_preset", "Save preset"),
-        ("up", "history_up", "History up"),
-        ("down", "history_down", "History down"),
-    ]
-
-    def action_history_up(self):
-        if self.index > 0:
-            self.index = self.index - 1
-            self.value = history[self.index]
-            self.used_history = True
-            self.cursor_position = len(self.value)
-
-    def action_history_down(self):
-        if self.index < len(history) - 1:
-            self.index = self.index + 1
-            self.value = history[self.index]
-            self.used_history = True
-            self.cursor_position = len(self.value)
-
-        elif self.index == len(history) - 1:
-            self.index = self.index + 1
-            self.value = self.old_val
-            self.used_history = False
-            self.cursor_position = len(self.value)
-
-    def action_save_preset(self):
-        preset_text = self.value.strip()
-        if preset_text and preset_text not in configs.get("presets"):
-            configs["presets"].append(preset_text)
-            save_config(CONFIG_FILE, configs)
-
-            self.app.query_one("#presets-list", ListView).mount(
-                ListItem(LabelItem(preset_text))
-            )
-
-    @on(Input.Changed)
-    def save_old_value(self, event: Input.Changed):
-        if not self.used_history:
-            self.old_val = event.input.value
-
-    @on(Input.Submitted)
-    def handle_input_submition(self, event: Input.Submitted):
-        input_text = event.input.value.strip()
-        if not input_text:
-            return
-        if input_text == history[-1] if history else None:
-            self.value = ""
-            self.index = len(history)
-            audio_queue.put(input_text)
-            return
-        audio_queue.put(input_text)
-        logs = self.app.query_one(RichLog)
-        logs.write(f"- {input_text}")
-        event.input.value = ""
-        history.append(input_text)
-        self.index = len(history)
-        self.used_history = False
+        play_text(text, voice=voice, syn_config=syn_settings)
 
 
 class VexalithApp(App):
@@ -197,7 +112,14 @@ class VexalithApp(App):
             self.settings,
         )
 
-        yield PresetInput(placeholder="Type something here...", type="text", id="input")
+        yield PresetInput(
+            placeholder="Type something here...",
+            type="text",
+            id="input",
+            audio_queue=audio_queue,
+            configs=configs,
+            history=history,
+        )
 
         yield Footer(show_command_palette=False)
 
@@ -208,7 +130,7 @@ class VexalithApp(App):
         self.sub_title = "Speak your mind"
 
         check_and_create_config(CONFIG_FILE)
-        configs = load_config(CONFIG_FILE)
+        configs.update(load_config(CONFIG_FILE))
 
         self.query_one("#presets-list", ListView).mount(
             *[ListItem(LabelItem(preset)) for preset in configs.get("presets")]

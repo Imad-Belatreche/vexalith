@@ -1,3 +1,5 @@
+from glob import glob
+
 from piper.voice import PiperVoice
 from piper.config import SynthesisConfig
 from piper.audio_playback import AudioPlayer
@@ -11,7 +13,9 @@ def check_and_create_config(
     if file_name not in os.listdir():
         try:
             file = open(file_name, "w")
-            file.write("""{"settings": {},"presets": []}""")
+            file.write(
+                """{"settings": {"speed": 1.05,"model": "en_US-danny-low.onnx"}, "presets": []}"""
+            )
             file.close()
             print("File created ")
         except Exception as e:
@@ -35,3 +39,9 @@ def play_text(text: str, voice: PiperVoice, syn_config: SynthesisConfig):
             if i > 0:
                 player.play(bytes(0))
             player.play(audio_chunk.audio_int16_bytes)
+
+
+def get_voices() -> list:
+    voices_paths = glob("*.onnx")
+    voices = [voice.replace(".onnx", "") for voice in voices_paths]
+    return voices

@@ -1,5 +1,7 @@
+from copy import deepcopy
 from queue import Queue
-from threading import Thread
+from threading import Lock, Thread
+from typing import Optional
 
 from piper import PiperVoice, SynthesisConfig
 from textual import on
@@ -16,21 +18,40 @@ from textual.widgets import (
     Select,
 )
 from constants import CONFIG_FILE
-from utils import check_and_create_config, load_config, play_text
+from utils import (
+    check_and_create_config,
+    get_voices,
+    load_config,
+    play_text,
+    save_config,
+)
 from widgets.label_item import LabelItem
 from widgets.preset_input import PresetInput
 
 history = []
 configs: dict = {}
+speed = 1.05
+model = "en_US-danny-low.onnx"
 
-syn_settings = SynthesisConfig(
-    noise_scale=0.3, length_scale=1.0, noise_w_scale=0.55, normalize_audio=True
-)
-voice = PiperVoice.load(
-    model_path="en_US-danny-low.onnx", config_path="en_US-danny-low.onnx.json"
-)
-
+settings_queue = Queue()
 audio_queue = Queue()
+state_lock = Lock()
+
+speed_list = [1.0, 1.3, 1.5, 0.7, 0.5]
+speed_list.sort()
+
+
+def make_syn_settings(speed_val: float) -> SynthesisConfig:
+    return SynthesisConfig(
+        noise_scale=0.3,
+        length_scale=speed_val,
+        noise_w_scale=0.55,
+        normalize_audio=True,
+    )
+
+
+voice = PiperVoice.load(model_path=model)
+syn_settings = make_syn_settings(speed)
 
 
 def tts_worker():
@@ -38,8 +59,51 @@ def tts_worker():
         text = audio_queue.get()
         if text is None:
             break
+        with state_lock:
+            current_voice = voice
+            current_settings = syn_settings
 
-        play_text(text, voice=voice, syn_config=syn_settings)
+        play_text(text, voice=current_voice, syn_config=current_settings)
+
+
+def settings_worker():
+    global voice, syn_settings
+
+    while True:
+        item = settings_queue.get()
+        if item is None:
+            break
+        try:
+            kind = item["kind"]
+            value = item["value"]
+            config_snapshot = item["config"]
+
+            if kind == "speed":
+                with state_lock:
+                    syn_settings = make_syn_settings(float(value))
+
+            elif kind == "model":
+                new_voice = PiperVoice.load(
+                    model_path=value,
+                    config_path=f"{value}.json",
+                )
+                with state_lock:
+                    voice = new_voice
+
+            save_config(CONFIG_FILE, config_snapshot)
+
+        finally:
+            settings_queue.task_done()
+
+
+def add_settings_to_queue(kind: str, value):
+    settings_queue.put(
+        {
+            "kind": kind,
+            "value": value,
+            "config": deepcopy(configs),
+        }
+    )
 
 
 class VexalithApp(App):
@@ -76,21 +140,17 @@ class VexalithApp(App):
             Container(
                 Label("Model:", classes="setting-item"),
                 Select(
-                    options=[
-                        ("Model 1", "Model 1"),
-                        ("Model 2", "Model 2"),
-                        ("Model 3", "Model 3"),
-                    ],
+                    options=[(voice, f"{voice}.onnx") for voice in get_voices()],
                     prompt="Select an option",
+                    value=model.replace(".onnx", ""),
+                    id="model_select",
                 ),
                 Label("Speed:", classes="setting-item"),
                 Select(
-                    options=[
-                        ("Speed 1", "Speed 1"),
-                        ("Speed 2", "Speed 2"),
-                        ("Speed 3", "Speed 3"),
-                    ],
+                    options=[(str(speed), speed) for speed in speed_list],
                     prompt="Select an option",
+                    value=speed,
+                    id="speed_select",
                 ),
                 id="settings-container",
             ),
@@ -124,13 +184,15 @@ class VexalithApp(App):
         yield Footer(show_command_palette=False)
 
     def on_mount(self):
-        global configs
+        global configs, speed, model
 
         self.title = "Vexalith"
         self.sub_title = "Speak your mind"
 
         check_and_create_config(CONFIG_FILE)
         configs.update(load_config(CONFIG_FILE))
+        speed = configs.get("settings").get("speed")
+        model = configs.get("settings").get("model")
 
         self.query_one("#presets-list", ListView).mount(
             *[ListItem(LabelItem(preset)) for preset in configs.get("presets")]
@@ -163,12 +225,33 @@ class VexalithApp(App):
         input_field.focus()
         input_field.cursor_position = len(input_field.value)
 
+    @on(Select.Changed)
+    def on_select_changed(self, event: Select.Changed):
+        global model, speed
+
+        if event.select.id == "model_select":
+            model = event.value
+            configs["settings"]["model"] = model
+            add_settings_to_queue("model", model)
+
+        elif event.select.id == "speed_select":
+            speed = event.value
+            configs["settings"]["speed"] = speed
+            add_settings_to_queue("speed", speed)
+
 
 if __name__ == "__main__":
-    thread = Thread(target=tts_worker)
-    thread.start()
+    audio_thread = Thread(target=tts_worker)
+    settings_thread = Thread(target=settings_worker)
+
+    audio_thread.start()
+    settings_thread.start()
+
     app = VexalithApp()
     app.run()
 
     audio_queue.put(None)
-    thread.join()
+    settings_queue.put(None)
+
+    audio_thread.join()
+    settings_thread.join()

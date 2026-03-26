@@ -30,9 +30,13 @@ from widgets.preset_input import PresetInput
 
 history = []
 configs: dict = {}
-speed = 1.0
-model = "en_US-danny-low.onnx"
-debounce_time = 0.8
+
+check_and_create_config(CONFIG_FILE)
+configs.update(load_config(CONFIG_FILE))
+
+speed = configs.get("settings").get("speed", 1.0)
+model = configs.get("settings").get("model", "en_US-danny-low.onnx")
+debounce_time = configs.get("settings").get("debounce_time", 0.8)
 
 settings_queue = Queue()
 audio_queue = Queue()
@@ -203,14 +207,8 @@ class VexalithApp(App):
         self.title = "Vexalith"
         self.sub_title = "Speak your mind"
 
-        check_and_create_config(CONFIG_FILE)
-        configs.update(load_config(CONFIG_FILE))
-        speed = configs.get("settings").get("speed")
-        model = configs.get("settings").get("model")
-        debounce_time = configs.get("settings").get("debounce_time")
-
         self.query_one("#presets-list", ListView).mount(
-            *[ListItem(LabelItem(preset)) for preset in configs.get("presets")]
+            *[ListItem(LabelItem(preset)) for preset in configs.get("presets", [])]
         )
         self.query_one("#input").focus()
 

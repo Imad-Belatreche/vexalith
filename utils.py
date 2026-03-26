@@ -14,7 +14,7 @@ def check_and_create_config(
         try:
             file = open(file_name, "w")
             file.write(
-                """{"settings": {"speed": 1.05,"model": "en_US-danny-low.onnx"}, "presets": []}"""
+                """{"settings": {"model": "en_US-danny-low.onnx","speed": 1.05,"mode": 1, "debounce_time": 0.8}, "presets": []}"""
             )
             file.close()
             print("File created ")

@@ -1,5 +1,6 @@
 from copy import deepcopy
 from queue import Queue
+import subprocess
 from threading import Lock, Thread
 
 from piper import PiperVoice, SynthesisConfig
@@ -57,14 +58,19 @@ syn_settings = make_syn_settings(speed)
 
 def tts_worker():
     while True:
-        text = audio_queue.get()
-        if text is None:
-            break
-        with state_lock:
-            current_voice = voice
-            current_settings = syn_settings
+        try:
+            text = audio_queue.get()
+            if text is None:
+                break
+            with state_lock:
+                current_voice = voice
+                current_settings = syn_settings
 
-        play_text(text, voice=current_voice, syn_config=current_settings)
+            play_text(text, voice=current_voice, syn_config=current_settings)
+        except subprocess.TimeoutExpired:
+            pass
+        except Exception as e:
+            print(f"[Audio Error]: {e}")
 
 
 def settings_worker():

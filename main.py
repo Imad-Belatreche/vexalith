@@ -1,7 +1,6 @@
 from copy import deepcopy
 from queue import Queue
 from threading import Lock, Thread
-from typing import Optional
 
 from piper import PiperVoice, SynthesisConfig
 from textual import on
@@ -30,14 +29,16 @@ from widgets.preset_input import PresetInput
 
 history = []
 configs: dict = {}
-speed = 1.05
+speed = 1.0
 model = "en_US-danny-low.onnx"
+debounce_time = 0.8
 
 settings_queue = Queue()
 audio_queue = Queue()
 state_lock = Lock()
 
 speed_list = [1.0, 1.3, 1.5, 0.7, 0.5]
+timer_list = [0.3, 0.5, 0.8, 1.0, 1.2, 1.5, 1.8, 2]
 speed_list.sort()
 
 
@@ -142,7 +143,7 @@ class VexalithApp(App):
                 Select(
                     options=[(voice, f"{voice}.onnx") for voice in get_voices()],
                     prompt="Select an option",
-                    value=model.replace(".onnx", ""),
+                    value=model,
                     id="model_select",
                 ),
                 Label("Speed:", classes="setting-item"),
@@ -151,6 +152,13 @@ class VexalithApp(App):
                     prompt="Select an option",
                     value=speed,
                     id="speed_select",
+                ),
+                Label("Debounce timer:", classes="setting-item"),
+                Select(
+                    options=[(str(timer), timer) for timer in timer_list],
+                    prompt="Select a timer",
+                    value=debounce_time,
+                    id="timer_select",
                 ),
                 id="settings-container",
             ),
@@ -184,7 +192,7 @@ class VexalithApp(App):
         yield Footer(show_command_palette=False)
 
     def on_mount(self):
-        global configs, speed, model
+        global configs, speed, model, debounce_time
 
         self.title = "Vexalith"
         self.sub_title = "Speak your mind"
@@ -193,6 +201,7 @@ class VexalithApp(App):
         configs.update(load_config(CONFIG_FILE))
         speed = configs.get("settings").get("speed")
         model = configs.get("settings").get("model")
+        debounce_time = configs.get("settings").get("debounce_time")
 
         self.query_one("#presets-list", ListView).mount(
             *[ListItem(LabelItem(preset)) for preset in configs.get("presets")]
@@ -238,6 +247,11 @@ class VexalithApp(App):
             speed = event.value
             configs["settings"]["speed"] = speed
             add_settings_to_queue("speed", speed)
+
+        elif event.select.id == "timer_select":
+            debounce_time = event.value
+            configs["settings"]["debounce_time"] = debounce_time
+            add_settings_to_queue("debounce_time", debounce_time)
 
 
 if __name__ == "__main__":

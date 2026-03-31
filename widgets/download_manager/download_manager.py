@@ -5,8 +5,8 @@ from textual import on, work
 from textual.app import ComposeResult
 from textual.containers import Grid
 from textual.screen import ModalScreen
-from textual.widgets import Button, Footer, Label, Tree
-from utils import get_piper_models_tree
+from textual.widgets import Button, Footer, Label, Tree, Select
+from utils import get_piper_models_tree, get_voices
 from widgets.download_manager.download_notification import DownloadNotification
 
 
@@ -117,4 +117,17 @@ class DownloadManager(ModalScreen):
         )
 
     def download_finished(self):
+        select = self.app.query_one("#model_select", Select)
+        # TODO: REMOVE DULICATION
+        select.set_options(
+            options=[
+                *[
+                    (voice.replace("v_models/", "").replace(".onnx", ""), voice)
+                    for voice in get_voices()
+                ],
+                ("Download models", "get_models"),
+            ]
+        )
+        print(f"Set this voice when finish: {get_voices()[0]}")
+        select.value = get_voices()[0]
         self.query_one(DownloadNotification).styles.display = "none"

@@ -25,6 +25,7 @@ from utils import (
     play_text,
     save_config,
 )
+from widgets.download_manager.download_manager import DownloadManager
 from widgets.label_item import LabelItem
 from widgets.preset_input import PresetInput
 
@@ -95,7 +96,7 @@ def settings_worker():
 
             elif kind == "model":
                 new_voice = PiperVoice.load(
-                    model_path=value,
+                    model_path=f"{value}",
                     config_path=f"{value}.json",
                 )
                 with state_lock:
@@ -151,9 +152,16 @@ class VexalithApp(App):
             Container(
                 Label("Model:", classes="setting-item"),
                 Select(
-                    options=[(voice, f"{voice}.onnx") for voice in get_voices()],
+                    options=[
+                        *[
+                            (voice.replace("v_models/", "").replace(".onnx", ""), voice)
+                            for voice in get_voices()
+                        ],
+                        ("Download models", "get_models"),
+                    ],
                     prompt="Select an option",
                     value=model,
+                    allow_blank=False,
                     id="model_select",
                 ),
                 Label("Speed:", classes="setting-item"),
@@ -161,6 +169,7 @@ class VexalithApp(App):
                     options=[(str(speed), speed) for speed in speed_list],
                     prompt="Select an option",
                     value=speed,
+                    allow_blank=False,
                     id="speed_select",
                 ),
                 Label("Debounce timer:", classes="setting-item"),
@@ -168,6 +177,7 @@ class VexalithApp(App):
                     options=[(str(timer), timer) for timer in timer_list],
                     prompt="Select a timer",
                     value=debounce_time,
+                    allow_blank=False,
                     id="timer_select",
                 ),
                 id="settings-container",
@@ -243,9 +253,15 @@ class VexalithApp(App):
         global model, speed
 
         if event.select.id == "model_select":
-            model = event.value
-            configs["settings"]["model"] = model
-            add_settings_to_queue("model", model)
+            if event.value == "get_models":
+                event.value = event.select.value
+                self.push_screen(DownloadManager())
+            else:
+                model = event.value
+                configs["settings"]["model"] = model
+                add_settings_to_queue("model", model)
+
+                self.query_one(PresetInput).last_spoken = ""
 
         elif event.select.id == "speed_select":
             speed = event.value
@@ -256,6 +272,8 @@ class VexalithApp(App):
             debounce_time = event.value
             configs["settings"]["debounce_time"] = debounce_time
             add_settings_to_queue("debounce_time", debounce_time)
+
+        self.query_one(PresetInput).focus()
 
 
 if __name__ == "__main__":

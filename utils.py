@@ -1,5 +1,6 @@
 from glob import glob
 
+from huggingface_hub import HfApi
 from piper.voice import PiperVoice
 from piper.config import SynthesisConfig
 from piper.audio_playback import AudioPlayer
@@ -14,7 +15,7 @@ def check_and_create_config(
         try:
             file = open(file_name, "w")
             file.write(
-                """{"settings": {"model": "en_US-danny-low.onnx","speed": 1.05,"mode": 1, "debounce_time": 0.8}, "presets": []}"""
+                """{"settings": {"model": "v_models/en_US-danny-low.onnx","speed": 1.05,"mode": 1, "debounce_time": 0.8}, "presets": []}"""
             )
             file.close()
             print("File created ")
@@ -42,6 +43,29 @@ def play_text(text: str, voice: PiperVoice, syn_config: SynthesisConfig):
 
 
 def get_voices() -> list:
-    voices_paths = glob("*.onnx")
-    voices = [voice.replace(".onnx", "") for voice in voices_paths]
-    return voices
+    voices_paths = glob("v_models/*.onnx")
+    return voices_paths
+
+
+def get_piper_models_tree():
+    api = HfApi()
+    repo_id = "rhasspy/piper-voices"
+    files = api.list_repo_tree(repo_id, recursive=True)
+
+    voice_models = [f.path for f in files if f.path.endswith(".onnx")]
+    models_dict: dict = {}
+
+    for model in voice_models:
+        parts = model.split("/")
+        current_level = models_dict
+
+        for part in parts[:-1]:
+            if part not in current_level:
+                current_level[part] = {}
+
+            current_level = current_level[part]
+
+        file_name = parts[-1]
+        current_level[file_name] = None
+
+    return models_dict

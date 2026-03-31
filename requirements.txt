@@ -2,3 +2,5 @@ textual
 textual-dev
 piper
 onnxruntime
+huggingface_hub
+requests

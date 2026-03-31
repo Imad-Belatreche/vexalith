@@ -93,7 +93,12 @@ class PresetInput(Input):
         else:
             self.mode = SpeakModes.SUBMIT
 
-        self.app.query_one(RichLog).write(f"[SYSTEM] Mode changed to: {self.mode.name}")
+        self.notify(
+            f"Mode changed to: {self.mode.name}",
+            title="System",
+            severity="information",
+            timeout=2,
+        )
 
     @on(Input.Changed)
     def save_old_value(self, event: Input.Changed):

@@ -17,7 +17,7 @@ Label.side-titles {
 }
 
 #presets {
-    width: 0;
+    width: 30%;
     padding: 1;
     height: 100%;
 }
@@ -52,8 +52,7 @@ Label.side-titles {
 }
 
 #settings {
-    width: 0;
+    width: 30%;
     padding: 1;
 }
-
 

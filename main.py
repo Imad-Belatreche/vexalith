@@ -1,4 +1,5 @@
 from copy import deepcopy
+from glob import glob
 from queue import Queue
 import subprocess
 from threading import Lock, Thread
@@ -28,6 +29,7 @@ from utils import (
 from widgets.download_manager.download_manager import DownloadManager
 from widgets.label_item import LabelItem
 from widgets.preset_input import PresetInput
+from widgets.start_screen import StartScreen
 
 history = []
 configs: dict = {}
@@ -35,17 +37,18 @@ configs: dict = {}
 check_and_create_config(CONFIG_FILE)
 configs.update(load_config(CONFIG_FILE))
 
+voices = get_voices()
+
 speed = configs.get("settings").get("speed", 1.0)
-model = configs.get("settings").get("model", "en_US-danny-low.onnx")
+model = configs.get("settings").get("model", "")
 debounce_time = configs.get("settings").get("debounce_time", 0.8)
 
 settings_queue = Queue()
 audio_queue = Queue()
 state_lock = Lock()
 
-speed_list = [1.0, 1.3, 1.5, 0.7, 0.5]
+speed_list = [0.5, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.5]
 timer_list = [0.3, 0.5, 0.8, 1.0, 1.2, 1.5, 1.8, 2]
-speed_list.sort()
 
 
 def make_syn_settings(speed_val: float) -> SynthesisConfig:
@@ -57,7 +60,10 @@ def make_syn_settings(speed_val: float) -> SynthesisConfig:
     )
 
 
-voice = PiperVoice.load(model_path=model)
+if not glob("v_models/*.onnx"):
+    voice = PiperVoice
+else:
+    voice = PiperVoice.load(model_path=model)
 syn_settings = make_syn_settings(speed)
 
 
@@ -95,10 +101,13 @@ def settings_worker():
                     syn_settings = make_syn_settings(float(value))
 
             elif kind == "model":
-                new_voice = PiperVoice.load(
-                    model_path=f"{value}",
-                    config_path=f"{value}.json",
-                )
+                if value == "get_models":
+                    return
+                else:
+                    new_voice = PiperVoice.load(
+                        model_path=f"{value}",
+                        config_path=f"{value}.json",
+                    )
                 with state_lock:
                     voice = new_voice
 
@@ -109,6 +118,8 @@ def settings_worker():
 
 
 def add_settings_to_queue(kind: str, value):
+    print(f"About to add these to settings: {kind}, {value}")
+    print(f"current settings: {configs}")
     settings_queue.put(
         {
             "kind": kind,
@@ -128,8 +139,8 @@ class VexalithApp(App):
         ("ctrl+s", "toggle_settings", "Toggle settings"),
     ]
 
-    show_presets = Reactive(False)
-    show_settings = Reactive(False)
+    show_presets = Reactive(True)
+    show_settings = Reactive(True)
 
     def compose(self) -> ComposeResult:
 
@@ -151,17 +162,17 @@ class VexalithApp(App):
             ),
             Container(
                 Label("Model:", classes="setting-item"),
+                # TODO: REMOVE DUPLICATION
                 Select(
                     options=[
                         *[
                             (voice.replace("v_models/", "").replace(".onnx", ""), voice)
-                            for voice in get_voices()
+                            for voice in voices
                         ],
                         ("Download models", "get_models"),
                     ],
                     prompt="Select an option",
                     value=model,
-                    allow_blank=False,
                     id="model_select",
                 ),
                 Label("Speed:", classes="setting-item"),
@@ -228,13 +239,13 @@ class VexalithApp(App):
         )
 
     def watch_show_presets(self, show: bool) -> None:
-        self.presets.styles.width = 30 if show else 0
+        self.presets.styles.width = "30%" if show else 0
 
     def action_toggle_presets(self):
         self.show_presets = not self.show_presets
 
     def watch_show_settings(self, show: bool) -> None:
-        self.settings.styles.width = 30 if show else 0
+        self.settings.styles.width = "30%" if show else 0
 
     def action_toggle_settings(self):
         self.show_settings = not self.show_settings
@@ -251,13 +262,24 @@ class VexalithApp(App):
     @on(Select.Changed)
     def on_select_changed(self, event: Select.Changed):
         global model, speed
+        event.select._allow_blank = False if glob("v_models/*.onnx") else True
 
         if event.select.id == "model_select":
-            if event.value == "get_models":
-                event.value = event.select.value
+
+            if event.select.value == "get_models":
+                event.select.value = model
                 self.push_screen(DownloadManager())
+
+                if not glob("v_models/*.onnx") and "start_screen" not in [
+                    s.id for s in self.screen_stack
+                ]:
+                    self.push_screen(StartScreen())
+
+                self.query_one(PresetInput).focus()
+
+                return
             else:
-                model = event.value
+                model = event.select.value
                 configs["settings"]["model"] = model
                 add_settings_to_queue("model", model)
 

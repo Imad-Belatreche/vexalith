@@ -11,11 +11,14 @@ import os
 def check_and_create_config(
     file_name: str,
 ) -> None:
+    if "v_models" not in os.listdir():
+        os.makedirs("v_models", exist_ok=True)
+
     if file_name not in os.listdir():
         try:
             file = open(file_name, "w")
             file.write(
-                """{"settings": {"model": "v_models/en_US-danny-low.onnx","speed": 1.05,"mode": 1, "debounce_time": 0.8}, "presets": []}"""
+                """{"settings": {"model": "get_models","speed": 1.0,"mode": 1, "debounce_time": 0.8}, "presets": []}"""
             )
             file.close()
             print("File created ")
@@ -42,7 +45,7 @@ def play_text(text: str, voice: PiperVoice, syn_config: SynthesisConfig):
             player.play(audio_chunk.audio_int16_bytes)
 
 
-def get_voices() -> list:
+def get_voices() -> list[str]:
     voices_paths = glob("v_models/*.onnx")
     return voices_paths
 

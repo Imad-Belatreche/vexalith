@@ -39,10 +39,8 @@ class DownloadManager(ModalScreen):
     voices: dict = {}
 
     def compose(self) -> ComposeResult:
-        tree: Tree = Tree(id="models-tree", label="Loading...")
-
         yield Label("Download Manager", id="download-title")
-        yield tree
+        yield Tree(id="models-tree", label="Loading...")
         yield DownloadNotification(id="download-notif")
         yield Footer()
 

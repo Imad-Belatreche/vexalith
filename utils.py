@@ -72,3 +72,13 @@ def get_piper_models_tree():
         current_level[file_name] = None
 
     return models_dict
+
+
+def get_model_select_options(voices: list[str]) -> list:
+   return [
+                        *[
+                            (os.path.basename(voice).replace(".onnx", ""), voice)
+                            for voice in voices
+                        ],
+                        ("Download models", "get_models"),
+   ]

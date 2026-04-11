@@ -6,14 +6,12 @@ from textual.app import ComposeResult
 from textual.containers import Grid
 from textual.screen import ModalScreen
 from textual.widgets import Button, Footer, Label, Tree, Select
-from utils import get_piper_models_tree, get_voices
+from utils import get_model_select_options, get_piper_models_tree, get_voices
 from widgets.download_manager.download_notification import DownloadNotification
 
 
-voices: dict = get_piper_models_tree()
-
-
 class ConfirmChoice(ModalScreen):
+
     def __init__(self, file_name: str):
         self.file_name = file_name
         super().__init__()
@@ -38,10 +36,28 @@ class DownloadManager(ModalScreen):
     CSS_PATH = "download_manager.tcss"
     BINDINGS = [("escape", "exit_manager", "Exit")]
 
+    voices: dict = {}
+
     def compose(self) -> ComposeResult:
-        tree: Tree = Tree(label="Languages")
+        yield Label("Download Manager", id="download-title")
+        yield Tree(id="models-tree", label="Loading...")
+        yield DownloadNotification(id="download-notif")
+        yield Footer()
+
+    def on_mount(self) -> None:
+        self.fetch_models()
+
+    @work(thread=True)
+    def fetch_models(self) -> None:
+        voices = get_piper_models_tree()
+
+        self.app.call_from_thread(self.populate_tree, voices)
+
+    def populate_tree(self, voices: dict) -> None:
+        # Grab the tree we yielded in compose()
+        tree = self.query_one("#models-tree", Tree)
+        tree.root.label = "Languages"
         tree.root.expand()
-        langs = tree.root
 
         def build_tree(node, current_dict, current_path=""):
             for key, value in current_dict.items():
@@ -53,12 +69,7 @@ class DownloadManager(ModalScreen):
                 else:
                     node.add_leaf(key, data=path)
 
-        build_tree(langs, voices)
-
-        yield Label("Download Manager", id="download-title")
-        yield tree
-        yield DownloadNotification(id="download-notif")
-        yield Footer()
+        build_tree(tree.root, voices)
 
     def action_exit_manager(self):
         self.app.pop_screen()
@@ -112,22 +123,11 @@ class DownloadManager(ModalScreen):
                             notif.update_progress, float(len(chunk)), total_size
                         )
 
-        self.app.call_from_thread(
-            self.download_finished,
-        )
+        self.app.call_from_thread(self.download_finished)
 
     def download_finished(self):
         select = self.app.query_one("#model_select", Select)
-        # TODO: REMOVE DULICATION
-        select.set_options(
-            options=[
-                *[
-                    (voice.replace("v_models/", "").replace(".onnx", ""), voice)
-                    for voice in get_voices()
-                ],
-                ("Download models", "get_models"),
-            ]
-        )
+        select.set_options(options=get_model_select_options(get_voices()))
         print(f"Set this voice when finish: {get_voices()[0]}")
         select.value = get_voices()[0]
         self.query_one(DownloadNotification).styles.display = "none"

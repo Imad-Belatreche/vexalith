@@ -3,7 +3,7 @@ from glob import glob
 from huggingface_hub import HfApi
 from piper.voice import PiperVoice
 from piper.config import SynthesisConfig
-from piper.audio_playback import AudioPlayer
+import sounddevice as sd
 import json
 import os
 
@@ -38,11 +38,14 @@ def save_config(file_name: str, config: dict) -> None:
 
 
 def play_text(text: str, voice: PiperVoice, syn_config: SynthesisConfig):
-    with AudioPlayer(voice.config.sample_rate) as player:
-        for i, audio_chunk in enumerate(voice.synthesize(text, syn_config=syn_config)):
-            if i > 0:
-                player.play(bytes(0))
-            player.play(audio_chunk.audio_int16_bytes)
+    with sd.RawOutputStream(
+        samplerate=voice.config.sample_rate, channels=1, dtype="int16"
+    ) as stream:
+        for audio_chunk in voice.synthesize(text, syn_config=syn_config):
+            stream.write(audio_chunk.audio_int16_bytes)
+
+        silence_pad = bytes(voice.config.sample_rate)
+        stream.write(silence_pad)
 
 
 def get_voices() -> list[str]:
@@ -75,10 +78,7 @@ def get_piper_models_tree():
 
 
 def get_model_select_options(voices: list[str]) -> list:
-   return [
-                        *[
-                            (os.path.basename(voice).replace(".onnx", ""), voice)
-                            for voice in voices
-                        ],
-                        ("Download models", "get_models"),
-   ]
+    return [
+        *[(os.path.basename(voice).replace(".onnx", ""), voice) for voice in voices],
+        ("Download models", "get_models"),
+    ]

@@ -169,7 +169,6 @@ class VexalithApp(App):
             ),
             Container(
                 Label("Model:", classes="setting-item"),
-                # TODO: REMOVE DUPLICATION
                 Select(
                     options=get_model_select_options(voices=voices),
                     prompt="Select an option",

@@ -1,6 +1,6 @@
 textual
 textual-dev
-piper
+piper-tts
 onnxruntime
 huggingface_hub
 requests

@@ -1,5 +1,6 @@
 from copy import deepcopy
 from glob import glob
+import os
 from queue import Queue
 import subprocess
 from threading import Lock, Thread
@@ -21,6 +22,7 @@ from textual.widgets import (
 from constants import CONFIG_FILE
 from utils import (
     check_and_create_config,
+    get_model_select_options,
     get_voices,
     load_config,
     play_text,
@@ -59,13 +61,18 @@ def make_syn_settings(speed_val: float) -> SynthesisConfig:
         normalize_audio=True,
     )
 
+available_models = glob("v_models/*.onnx")
 
-if not glob("v_models/*.onnx"):
+
+if not available_models:
     voice = PiperVoice
 else:
+    if model == "get_models" or not model:
+        model = available_models[0]
+        configs["settings"]["model"] = model
+        save_config(CONFIG_FILE, configs)
+        
     voice = PiperVoice.load(model_path=model)
-syn_settings = make_syn_settings(speed)
-
 
 def tts_worker():
     while True:
@@ -164,13 +171,7 @@ class VexalithApp(App):
                 Label("Model:", classes="setting-item"),
                 # TODO: REMOVE DUPLICATION
                 Select(
-                    options=[
-                        *[
-                            (voice.replace("v_models/", "").replace(".onnx", ""), voice)
-                            for voice in voices
-                        ],
-                        ("Download models", "get_models"),
-                    ],
+                    options=get_model_select_options(voices=voices),
                     prompt="Select an option",
                     value=model,
                     id="model_select",

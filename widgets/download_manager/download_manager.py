@@ -127,7 +127,6 @@ class DownloadManager(ModalScreen):
 
     def download_finished(self):
         select = self.app.query_one("#model_select", Select)
-        # TODO: REMOVE DULICATION
         select.set_options(options=get_model_select_options(get_voices()))
         print(f"Set this voice when finish: {get_voices()[0]}")
         select.value = get_voices()[0]

@@ -1,12 +1,14 @@
 from copy import deepcopy
 from glob import glob
-import os
+from pathlib import Path
 from queue import Queue
+import socket
 import subprocess
-from threading import Lock, Thread
+import sys
+from threading import Event, Lock, Thread
 
 from piper import PiperVoice, SynthesisConfig
-from textual import on
+from textual import on, work
 from textual.app import App, ComposeResult
 from textual.containers import Center, HorizontalGroup, VerticalGroup, Container
 from textual.reactive import Reactive
@@ -30,6 +32,7 @@ from utils import (
 )
 from widgets.download_manager.download_manager import DownloadManager
 from widgets.label_item import LabelItem
+from widgets.overlay_active import OverlayActiveScreen
 from widgets.preset_input import PresetInput
 from widgets.start_screen import StartScreen
 
@@ -53,6 +56,19 @@ speed_list = [0.5, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.5]
 timer_list = [0.3, 0.5, 0.8, 1.0, 1.2, 1.5, 1.8, 2]
 
 
+def listen_for_overlay_socket(stop_event: Event):
+    server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    server.bind(("localhost", 19620))
+    server.listen(5)
+
+    while not stop_event.is_set():
+        client, addr = server.accept()
+        message = client.recv(1024).decode("utf-8")
+        audio_queue.put(message)
+        print(f"Overlay speaks: {message}")
+        client.close()
+
+
 def make_syn_settings(speed_val: float) -> SynthesisConfig:
     return SynthesisConfig(
         noise_scale=0.3,
@@ -60,6 +76,7 @@ def make_syn_settings(speed_val: float) -> SynthesisConfig:
         noise_w_scale=0.55,
         normalize_audio=True,
     )
+
 
 available_models = glob("v_models/*.onnx")
 
@@ -71,8 +88,9 @@ else:
         model = available_models[0]
         configs["settings"]["model"] = model
         save_config(CONFIG_FILE, configs)
-        
+
     voice = PiperVoice.load(model_path=model)
+
 
 def tts_worker():
     while True:
@@ -144,7 +162,9 @@ class VexalithApp(App):
         ("ctrl+d", "toggle_dark", "Toggle dark mode"),
         ("ctrl+p", "toggle_presets", "Toggle presets"),
         ("ctrl+s", "toggle_settings", "Toggle settings"),
+        ("ctrl+b", "open_overlay", "Open Overlay"),
     ]
+    overlay_process: subprocess.Popen | None = None
 
     show_presets = Reactive(True)
     show_settings = Reactive(True)
@@ -238,6 +258,24 @@ class VexalithApp(App):
             "textual-dark" if self.theme == "textual-light" else "textual-light"
         )
 
+    @work(thread=True)
+    def action_open_overlay(self):
+        if self.overlay_process and self.overlay_process.poll() is None:
+            return
+        app_dir = Path(__file__).resolve().parent
+        overlay_path = app_dir / "overlay.py"
+
+        self.overlay_process = subprocess.Popen(
+            [sys.executable, str(overlay_path)],
+            cwd=str(app_dir),
+        )
+
+        self.app.call_from_thread(self.push_screen, OverlayActiveScreen())
+
+        self.overlay_process.wait()
+
+        self.app.call_from_thread(self.pop_screen)
+
     def watch_show_presets(self, show: bool) -> None:
         self.presets.styles.width = "30%" if show else 0
 
@@ -302,14 +340,25 @@ if __name__ == "__main__":
     audio_thread = Thread(target=tts_worker)
     settings_thread = Thread(target=settings_worker)
 
+    stop_event = Event()
+    socket_overlay = Thread(
+        target=listen_for_overlay_socket, args=(stop_event,), daemon=True
+    )
+
     audio_thread.start()
     settings_thread.start()
+    socket_overlay.start()
 
     app = VexalithApp()
     app.run()
 
+    if app.overlay_process and app.overlay_process.poll() is None:
+        app.overlay_process.terminate()
+        app.overlay_process.wait()
+
     audio_queue.put(None)
     settings_queue.put(None)
 
+    stop_event.set()
     audio_thread.join()
     settings_thread.join()

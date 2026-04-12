@@ -4,3 +4,4 @@ piper-tts
 onnxruntime
 huggingface_hub
 requests
+sounddevice 

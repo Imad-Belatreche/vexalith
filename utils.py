@@ -37,9 +37,12 @@ def save_config(file_name: str, config: dict) -> None:
         json.dump(config, f, indent=4)
 
 
-def play_text(text: str, voice: PiperVoice, syn_config: SynthesisConfig):
+def play_text(text: str, voice: PiperVoice, syn_config: SynthesisConfig, device=None):
     with sd.RawOutputStream(
-        samplerate=voice.config.sample_rate, channels=1, dtype="int16"
+        samplerate=voice.config.sample_rate,
+        channels=1,
+        dtype="int16",
+        device=device,
     ) as stream:
         for audio_chunk in voice.synthesize(text, syn_config=syn_config):
             stream.write(audio_chunk.audio_int16_bytes)
@@ -82,3 +85,25 @@ def get_model_select_options(voices: list[str]) -> list:
         *[(os.path.basename(voice).replace(".onnx", ""), voice) for voice in voices],
         ("Download models", "get_models"),
     ]
+
+
+def get_virtual_audio_device():
+    devices = sd.query_devices()
+
+    virtual_keywords = [
+        "cable",
+        "blackhole",
+        "soundflower",
+        "loopback",
+        "null",
+        "virtual",
+    ]
+
+    for index, dev in enumerate(devices):
+        if dev["max_output_channels"] > 0:
+            dev_name = dev["name"].lower()
+            if any(keyword in dev_name for keyword in virtual_keywords):
+                print(f"Found virtual device: {dev['name']}")
+                return index  # Return the device ID
+
+    return None

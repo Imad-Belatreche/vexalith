@@ -260,7 +260,6 @@ class VexalithApp(App):
 
     @work(thread=True)
     def action_open_overlay(self):
-        print("OPEN THE OVERLAY")
         if self.overlay_process and self.overlay_process.poll() is None:
             return
         app_dir = Path(__file__).resolve().parent

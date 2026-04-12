@@ -25,6 +25,7 @@ from constants import CONFIG_FILE
 from utils import (
     check_and_create_config,
     get_model_select_options,
+    get_virtual_audio_device,
     get_voices,
     load_config,
     play_text,
@@ -101,8 +102,14 @@ def tts_worker():
             with state_lock:
                 current_voice = voice
                 current_settings = syn_settings
+            virtual_device_id = get_virtual_audio_device()
 
-            play_text(text, voice=current_voice, syn_config=current_settings)
+            play_text(
+                text,
+                voice=current_voice,
+                syn_config=current_settings,
+                device=virtual_device_id,
+            )
         except subprocess.TimeoutExpired:
             pass
         except Exception as e:

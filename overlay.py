@@ -1,11 +1,31 @@
 from glob import glob
 import json
-import os
+import socket
 import tkinter as tk
 
-import keyboard
 
-from utils import load_config, save_config
+def load_config(file_name: str) -> dict:
+    try:
+        with open(file_name, "r") as f:
+            return json.load(f)
+    except FileNotFoundError:
+        return {}
+
+
+def save_config(file_name: str, config: dict) -> None:
+    with open(file_name, "w") as f:
+        json.dump(config, f, indent=4)
+
+
+def send_message(text: str):
+    try:
+        client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        client.connect(("localhost", 19620))
+        client.sendall(text.encode("utf-8"))
+        client.close()
+        print(f"Sent: {text}")
+    except:
+        print("TUI app not running")
 
 
 BACK_COLOR = "#0B0B27"
@@ -44,23 +64,22 @@ def do_drag(event: tk.Event):
     root.geometry(f"+{x}+{y}")
 
 
-def exit_app():
+def exit_app(event: None):
     save_config("overlay_pos.json", {"x": root.winfo_x(), "y": root.winfo_y()})
     root.quit()
     root.update()
 
 
-keyboard.add_hotkey("ctrl+shift+o", exit_app)
-
-
 root.bind("<Button-1>", start_drag)
 root.bind("<B1-Motion>", do_drag)
+root.bind("<Control-b>", exit_app)
+root.bind("<Control-B>", exit_app)
 
-root.wm_attributes("-alpha", 0.6)
+root.wm_attributes("-alpha", 0.7)
 
 title = tk.Label(
     root,
-    text="Vexalith-Olay | Press Ctrl+Shift+o to exit",
+    text="Vexalith-Olay | Press Ctrl+b to exit",
     background="#3E3E77",
     padx=10,
     fg="white",
@@ -105,6 +124,7 @@ def on_input_enter(event: None):
     history.append(text)
     history_index = None
     list_box.insert(tk.END, f"- {text}")
+    send_message(text)
     entery.delete(0, tk.END)
 
 
@@ -141,9 +161,21 @@ def on_arrow_down_history(event: None):
     history_index = None
 
 
+def on_focus_in(event):
+    if event.widget == root:
+        root.wm_attributes("-alpha", 0.7)
+        entery.focus()
+
+
+def on_focus_out(event):
+    if event.widget == root:
+        root.wm_attributes("-alpha", 0.3)
+
+
 entery.bind("<Return>", on_input_enter)
 entery.bind("<Up>", on_arrow_up_history)
 entery.bind("<Down>", on_arrow_down_history)
-
+root.bind("<FocusIn>", on_focus_in)
+root.bind("<FocusOut>", on_focus_out)
 
 root.mainloop()

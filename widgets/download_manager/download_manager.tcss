@@ -44,11 +44,3 @@ ConfirmChoice {
 Button {
     width: 100%;
 }
-
-
-DownloadNotification {
-    display: none;
-    height: 2;
-    width: 100%;
-    align: right bottom;
-}

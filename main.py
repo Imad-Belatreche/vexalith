@@ -8,6 +8,7 @@ import sys
 from threading import Event, Lock, Thread
 
 from piper import PiperVoice, SynthesisConfig
+import requests
 from textual import on, work
 from textual.app import App, ComposeResult
 from textual.containers import Center, HorizontalGroup, VerticalGroup, Container
@@ -32,6 +33,7 @@ from utils import (
     save_config,
 )
 from widgets.download_manager.download_manager import DownloadManager
+from widgets.download_manager.download_notification import DownloadNotification
 from widgets.label_item import LabelItem
 from widgets.overlay_active import OverlayActiveScreen
 from widgets.preset_input import PresetInput
@@ -179,6 +181,7 @@ class VexalithApp(App):
     def compose(self) -> ComposeResult:
 
         yield Header(show_clock=True, icon="🗣️")
+        yield DownloadNotification(id="download-notif")
 
         self.presets = VerticalGroup(
             Center(
@@ -277,11 +280,11 @@ class VexalithApp(App):
             cwd=str(app_dir),
         )
 
-        self.app.call_from_thread(self.push_screen, OverlayActiveScreen())
+        self.call_from_thread(self.push_screen, OverlayActiveScreen())
 
         self.overlay_process.wait()
 
-        self.app.call_from_thread(self.pop_screen)
+        self.call_from_thread(self.pop_screen)
 
     def watch_show_presets(self, show: bool) -> None:
         self.presets.styles.width = "30%" if show else 0
@@ -313,7 +316,9 @@ class VexalithApp(App):
 
             if event.select.value == "get_models":
                 event.select.value = model
-                self.push_screen(DownloadManager())
+                self.push_screen(
+                    DownloadManager(on_download_request=self.request_download)
+                )
 
                 if not glob("v_models/*.onnx") and "start_screen" not in [
                     s.id for s in self.screen_stack
@@ -341,6 +346,74 @@ class VexalithApp(App):
             add_settings_to_queue("debounce_time", debounce_time)
 
         self.query_one(PresetInput).focus()
+
+    def request_download(self, file_name: str):
+        notif = self.query_one(DownloadNotification)
+        notif.styles.display = "block"
+        notif.reset_progress()
+
+        self.start_download(file_name)
+
+    @work(thread=True)
+    def start_download(self, file_name: str | None) -> None:
+        if file_name is None:
+            return
+
+        base_url = "https://huggingface.co/rhasspy/piper-voices/resolve/main/"
+        notif = self.query_one(DownloadNotification)
+
+        import os
+
+        os.makedirs("v_models", exist_ok=True)
+
+        files_to_download = [file_name, f"{file_name}.json"]
+        try:
+
+            for file_ref in files_to_download:
+                file_name_only = Path(file_ref).name
+                file_path = Path("v_models") / file_name_only
+
+                self.call_from_thread(
+                    notif.set_label, f"Downloading {file_name_only}..."
+                )
+
+                response = requests.get(
+                    f"{base_url}{file_ref}", stream=True, timeout=10
+                )
+                response.raise_for_status()
+
+                total_size_str = response.headers.get("content-length")
+                total_size = float(total_size_str) if total_size_str else None
+
+                self.call_from_thread(notif.reset_progress, total=total_size)
+
+                with open(file_path, "wb") as file:
+                    for chunk in response.iter_content(chunk_size=8192):
+                        if chunk:
+                            file.write(chunk)
+                            self.call_from_thread(
+                                notif.update_progress, float(len(chunk)), total_size
+                            )
+
+            self.call_from_thread(self.download_finished, file_name)
+        except Exception as e:
+            for file_ref in files_to_download:
+                partial_file = Path(f"v_models") / Path(file_ref).name
+                partial_file.unlink(missing_ok=True)
+
+            self.call_from_thread(
+                self.notify, f"Download failed: {str(e)}", severity="error"
+            )
+            self.call_from_thread(lambda: setattr(notif.styles, "display", "none"))
+
+    def download_finished(self, file_name: str):
+        select = self.query_one("#model_select", Select)
+        self.notify(f"Download finished: {file_name}.")
+
+        select.set_options(options=get_model_select_options(get_voices()))
+        print(f"Set this voice when finish: {get_voices()[0]}")
+        select.value = get_voices()[0]
+        self.query_one(DownloadNotification).styles.display = "none"
 
 
 if __name__ == "__main__":

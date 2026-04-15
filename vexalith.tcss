@@ -56,3 +56,15 @@ Label.side-titles {
     padding: 1;
 }
 
+DownloadNotification {
+    dock: top;
+    height: auto;
+    align-horizontal: right;
+    width: 60;
+    height: 4;
+    border: solid $accent;
+    background: $panel;
+    padding: 0 1;
+    display: none;
+}
+

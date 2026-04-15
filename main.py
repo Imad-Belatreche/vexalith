@@ -370,11 +370,11 @@ class VexalithApp(App):
         try:
 
             for file_ref in files_to_download:
-                ref_path_split = file_ref.split("/")
-                file_path = f"v_models/{ref_path_split[-1]}"
+                file_name_only = Path(file_ref).name
+                file_path = Path("v_models") / file_name_only
 
                 self.call_from_thread(
-                    notif.set_label, f"Downloading {ref_path_split[-1]}..."
+                    notif.set_label, f"Downloading {file_name_only}..."
                 )
 
                 response = requests.get(
@@ -398,8 +398,7 @@ class VexalithApp(App):
             self.call_from_thread(self.download_finished, file_name)
         except Exception as e:
             for file_ref in files_to_download:
-                ref_path_split = file_ref.split("/")
-                partial_file = Path(f"v_models/{ref_path_split[-1]}")
+                partial_file = Path(f"v_models") / Path(file_ref).name
                 partial_file.unlink(missing_ok=True)
 
             self.call_from_thread(

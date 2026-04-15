@@ -3,7 +3,7 @@ from textual.widgets import Label, ProgressBar
 
 
 class DownloadNotification(Container):
-    CSS_PATH = "download_manager.tcss"
+    CSS_PATH = "vexalith.tcss"
 
     def __init__(
         self,
